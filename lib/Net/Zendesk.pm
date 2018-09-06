@@ -2,6 +2,7 @@ package Net::Zendesk;
 use strict;
 use warnings;
 use MIME::Base64;
+use JSON;
 
 our $VERSION = '0.01';
 
@@ -65,7 +66,7 @@ sub make_request {
                 ? ('Content-Type' => 'application/json') : ()
             ),
         ],
-        $params,
+        to_json $params,
     );
 }
 
