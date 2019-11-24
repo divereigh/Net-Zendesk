@@ -42,14 +42,85 @@ sub create_ticket {
     return $self->make_request('POST', $path, { ticket => $ticket });
 }
 
+sub show_ticket {
+    my ($self, $id) = @_;
+    return(undef) if !defined($id);
+    my $path = 'tickets/' . $id . '.json';
+    return $self->make_request('GET', $path, {});
+}
+
+sub create_user {
+    my ($self, $user, %extra) = @_;
+    my $path = 'users.json';
+    if (%extra) {
+        $path .= '?' . join('&', map("$_=$extra{$_}", keys %extra));
+    }
+    return $self->make_request('POST', $path, { user => $user });
+}
+
+sub create_or_update_user {
+    my ($self, $user, %extra) = @_;
+    my $path = 'users/create_or_update.json';
+    if (%extra) {
+        $path .= '?' . join('&', map("$_=$extra{$_}", keys %extra));
+    }
+    return $self->make_request('POST', $path, { user => $user });
+}
+
+sub update_user {
+    my ($self, $id, $user) = @_;
+    return(undef) if !defined($id);
+    my $path = 'users/' . $id . '.json';
+    return $self->make_request('PUT', $path, { user => $user });
+}
+
+sub show_user {
+    my ($self, $id) = @_;
+    return(undef) if !defined($id);
+    my $path = 'users/' . $id . '.json';
+    return $self->make_request('GET', $path, {});
+}
+
+sub merge_user {
+    my ($self, $id1, $id2) = @_;
+    return(undef) if (!defined($id1) || !defined($id2));
+    my $path = 'users/' . $id2 . '/merge.json';
+    return $self->make_request('PUT', $path, { user => { id => $id1 }});
+}
+
 sub search {
-    my ($self, $search_args) = @_;
+    my ($self, $search_args, $page) = @_;
     my $parsed_args = $self->_parse_search_args($search_args);
 
     require URI::Escape;
     my $query = URI::Escape::uri_escape(join(' ' => @$parsed_args));
+    my $path='search.json?';
+    $path .= 'page=' . $page . '&' if ($page);
+    $path .= 'query=' . $query;
 
-    return $self->make_request('GET', 'search.json?query=' . $query, {});
+    return $self->make_request('GET', $path, {});
+}
+
+sub search_next {
+    my ($self, $lastresult) = @_;
+
+    if ($lastresult && $lastresult->{next_page}) {
+	my $result=$self->_ua->get($lastresult->{next_page});
+	return($result ? from_json $result->decoded_content : undef);
+    } else {
+	return undef;
+    }
+}
+
+sub search_prev {
+    my ($self, $lastresult) = @_;
+
+    if ($lastresult && $lastresult->{prev_page}) {
+	my $result=$self->_ua->get($lastresult->{prev_page});
+	return($result ? from_json $result->decoded_content : undef);
+    } else {
+	return undef;
+    }
 }
 
 sub make_request {
@@ -59,7 +130,7 @@ sub make_request {
     die 'please provide a relative path' unless $path && $path !~ m{\A/api};
     die 'please provide a HASHREF with parameters' unless $params && ref $params eq 'HASH';
     my $method = lc $type;
-    return $self->_ua->$method(
+    my $result=$self->_ua->$method(
         'https://' . $self->{_domain} . '/api/v2/' . $path,
         [
             ($method eq 'post' || $method eq 'put'
@@ -68,6 +139,7 @@ sub make_request {
         ],
         to_json $params,
     );
+    return($result ? from_json $result->decoded_content : undef);
 }
 
 sub _parse_search_args {
